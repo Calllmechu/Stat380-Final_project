@@ -1,0 +1,285 @@
+---
+title: "Analysis of the Factors Affecting Beijing Housing Price"
+author: "Chuyu Liu, Yanxiang Zhu"
+date: "2019/4/20"
+output: html_document
+---
+
+
+# Part 1: Data Preparation
+
+Input data and merge two data by year and month.
+
+```{r}
+price <- read.csv("C:/Users/Chuyu/Desktop/price_new.csv", header = T, sep = ",", stringsAsFactors = F)
+Macro <- read.csv("C:/Users/Chuyu/Desktop/Macroscopic.csv", header = T, sep = ",", stringsAsFactors = F)
+
+#Data type conversion
+price$Cid <- as.character(price$Cid)
+price$buildingType <- as.factor(price$buildingType)
+price$renovationCondition <- as.factor(price$renovationCondition)
+price$buildingStructure <- as.factor(price$buildingStructure)
+price$district <- as.factor(price$district)
+
+# merge data
+price$tradeTime <- as.Date(price$tradeTime)
+Macro$Date <- as.Date(Macro$Date)
+price$tradeMonth <- format(price$tradeTime, "%Y-%m") 
+Macro$month <- format(Macro$Date, "%Y-%m") 
+price2 <- merge(price, Macro, all.x = T, by.x = "tradeMonth", by.y = "month")
+
+# Delete irrelevant variables
+price2 <- price2[,-c(1,26)]
+```
+
+# Part 2: Data Introduction
+
+## 2.1  Feature processing
+
+Selecting numbers in floor using regular expressions.
+
+```{r}
+library(stringr)
+price2$floor <- as.numeric(str_extract_all(price2$floor,"[0-9]+$")) 
+```
+
+Calculate the age of the house.(tradeTime-constructionTime)
+
+```{r}
+price2$houseAge <- as.numeric(format(price2$tradeTime,"%Y"))-price2$constructionTime
+```
+
+## 2.2 Summarise
+
+Data selection
+
+```{r}
+library(dplyr)
+data1 <- select(price2,price)
+head(data1)
+data2 <- select(price2,4:7)
+head(data2)
+```
+
+Sorting data
+
+```{r,warning = FALSE}
+data3 <- arrange(price2,price,totalPrice)
+head(data3)
+```
+
+Data summary
+
+```{r}
+summary(price2)
+summarise(group_by(price2,format(price2$tradeTime,"%Y")),mean(price),sd(price),mean(totalPrice),sd(totalPrice))
+```
+
+```{r}
+apply(price2[,c(6:14)],2,mean)
+```
+
+View the difference in house prices for buildings aged 15 years and below and 15 years or older.
+
+```{r}
+houseAge15 <- NA
+for(i in 1:nrow(price2)){
+  if(price2$houseAge[i] >= 15){
+    houseAge15[i] <- 0
+  }else{
+    houseAge15[i] <- 1
+  }
+}
+houseAge15_new <- data.frame(houseAge15,price2$price,price2$totalPrice)
+summarise(group_by(houseAge15_new,houseAge15),mean(price2.price),sd(price2.price),mean(price2.totalPrice),sd(price2.totalPrice))
+```
+
+View the price difference between the house more than 15 years old with a subway nearby and the  others.
+
+```{r}
+fun1 <- function(x,y){
+  if(x==1 & y>=15){
+    return(1)
+  }else{
+    return(0)
+  }
+}
+subway_15 <- NA
+for(i in 1:nrow(price2)){
+  subway_15[i] <- fun1(price2$subway[i],price2$houseAge[i])
+}
+subway_15_new <- data.frame(subway_15,price2$price,price2$totalPrice)
+summarise(group_by(subway_15_new,subway_15),mean(price2.price),sd(price2.price),mean(price2.totalPrice),sd(price2.totalPrice))
+```
+
+# Part 3: Data Visualization
+
+## 3.1 House price trend
+
+```{r}
+price_month <- summarise(group_by(price2,format(price2$tradeTime,"%Y-%m")), mean(price),mean(totalPrice))
+colnames(price_month)[1] <- "Time"
+# plot
+plot(price_month$`mean(totalPrice)`,type = "l", xaxt = "n", ylab = "price", xlab = "Date", main = "plot of housing price")
+par(new=T)
+plot(price_month$`mean(price)`,type = "l",col = "red", xaxt = "n", ylab = "", xlab = "", axes=F)
+axis(4,col="red",col.ticks="red",col.axis="red")
+axis(1,at = 1:nrow(price_month), labels = price_month$Time, cex.axis=1,las=1)
+legend("topleft", col = c("black","red"), lty=1, legend = c("Total price (million)","Average price"))
+```
+
+## 3.2 Categorical variables 
+
+Plot of Categorical variables.
+
+```{r}
+# Categorical variables: buildingType, renovationCondition, buildingStructure, elevator, fiveYearsProperty, subway, district
+class_name <- c("buildingType", "renovationCondition", "buildingStructure", "elevator", "fiveYearsProperty", "subway", "district")
+par(mfrow = c(2,4))
+for(i in 1:length(class_name)){
+  barplot(table(price2[,match(class_name[i],colnames(price2))]), 
+          xlab = class_name[i], ylab = "count")
+}
+```
+
+The distribution of price under different classifications of categorical variables.
+
+```{r}
+par(mfrow = c(2,4))
+for(i in 1:length(class_name)){
+  boxplot(price2$price~price2[,match(class_name[i],colnames(price2))], xlab=class_name[i], ylab="Housing price", col=rainbow(4))
+}
+```
+
+## 3.3 Continuous variables
+
+Plot of continuous variables
+
+```{r}
+# Continuous variables: Lng, Lat, followers, square, livingRoom, drawingRoom, kitchen, bathRoom, floor, ladderRatio, communityAverage, M2, M2_GrowthRate, M1, M1_GrowthRate, M0, M0_GrowthRate, houseAge
+con_name <- c("Lng","Lat","followers","square","livingRoom","drawingRoom","kitchen","bathRoom",
+              "floor","ladderRatio","communityAverage","M2","M2_GrowthRate","M1","M1_GrowthRate",
+              "M0","M0_GrowthRate","houseAge")
+par(mfrow = c(3,3))
+for(i in 1:9){
+  hist(price2[,match(con_name[i],colnames(price2))],xlab = con_name[i], main = "",freq = F)
+  lines(density(price2[,match(con_name[i],colnames(price2))]),col = "red")
+}
+for(i in 10:18){
+  hist(price2[,match(con_name[i],colnames(price2))],xlab = con_name[i], main = "",freq = F)
+  lines(density(price2[,match(con_name[i],colnames(price2))]),col = "red")
+}
+```
+
+Relationship between continuous variables and house prices.
+
+```{r}
+par(mfrow = c(3,3))
+for(i in 1:9){
+  plot(price2[,match(con_name[i],colnames(price2))], price2$price, 
+       pch=20, xlab = con_name[i], ylab = "price")
+}
+for(i in 10:18){
+  plot(price2[,match(con_name[i],colnames(price2))], price2$price, 
+       pch=20, xlab = con_name[i], ylab = "price")
+}
+```
+
+Correlation analysis visualization.
+
+```{r}
+library(corrplot)
+cor_result <- cor(price2[,match(c("price",con_name),colnames(price2))])
+corrplot(cor_result, type = "upper", order = "hclust", tl.col = "black", tl.srt = 45)
+```
+
+# Part 4: Data Analysis
+
+## 4.1 Principal Component Analysis
+
+There are 16 principal components whose eigenvalues are greater than 1, so selecting 16 principal components can explain 75.08% of the variation of the data.
+
+```{r}
+price3 <- price2[,match(c("id",con_name,class_name),colnames(price2))]
+# Convert categorical variables into dummy variables
+factor_name <- c("buildingType","renovationCondition","buildingStructure","district")
+c1 <- as.data.frame(model.matrix(~buildingType, price3))[,-1]
+c2 <- as.data.frame(model.matrix(~renovationCondition, price3))[,-1]
+c3 <- as.data.frame(model.matrix(~buildingStructure, price3))[,-1]
+c4 <- as.data.frame(model.matrix(~district, price3))[,-1]
+price3 <- cbind(price3,c1,c2,c3,c4)
+price3 <- price3[,-match(factor_name,colnames(price3))]
+# Data standardization
+price3_scale <- as.data.frame(scale(price3[,-1])) 
+# Principal Component Analysis
+prin <- princomp(price3_scale,cor = T)
+summary(prin,loadings=TRUE)
+# Gravel map
+screeplot(prin,type="lines")
+# Eigenvalue and eigenvector
+y <- eigen(cor(price3_scale))
+y$values
+# Calculate the total score of the principal component
+s <- prin$scores[,1:16]
+scores <- 0
+for (i in 1:16){
+  scores=(y$values[i]*s[,i])/(sum(y$values[1:5]))+scores
+}
+scores <- cbind(price3$id,scores)
+head(scores)
+```
+
+## 4.2 Multiple regression analysis
+
+Because the correlation coefficients of M1, M1_GrowthRate and M2 are greater than 0.7, M1 and M1_GrowthRate is deleted.
+
+```{r}
+# traindata and testdata
+price4 <- price2[,match(c("id","tradeTime","price",con_name,class_name),colnames(price2))]
+train <- price4[which(price4$tradeTime<"2017-04-30"),]
+test <- price4[-which(price4$tradeTime<"2017-04-30"),]
+# model
+fit1 <- lm(price~.,data = train[,-c(1,2,17,18)])
+summary(fit1)
+# predict
+pre1 <- predict(fit1,test)
+mse <- sqrt(mean((test$price-pre1)^2))
+mse
+# plot
+pre1 <- as.data.frame(cbind(test$price,pre1))
+colnames(pre1) = c("price_true","price_pre")
+pre1 <- pre1[order(pre1$price_true),]
+plot(pre1$price_true,type = "l",ylab = "price",
+     main = "plot of price and predicted price (Multiple regression analysis)")
+lines(pre1$price_pre,type = "l",col = "red")
+legend("topleft",col = c("black","red"),legend = c("price","predicted price"),lty=1)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+plot(cars)
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
