@@ -1,0 +1,46 @@
+---
+title: "Analysis of the Factors Affecting Beijing Housing Price"
+author: "Chuyu Liu, Yanxiang Zhu"
+date: "2019/4/20"
+output: html_document
+---
+
+
+# Part 1: Data Preparation
+
+Input data and merge two data by year and month.
+
+```{r}
+price <- read.csv("C:/Users/Chuyu/Desktop/price_new.csv", header = T, sep = ",", stringsAsFactors = F)
+Macro <- read.csv("C:/Users/Chuyu/Desktop/Macroscopic.csv", header = T, sep = ",", stringsAsFactors = F)
+
+#Data type conversion
+price$Cid <- as.character(price$Cid)
+price$buildingType <- as.factor(price$buildingType)
+price$renovationCondition <- as.factor(price$renovationCondition)
+price$buildingStructure <- as.factor(price$buildingStructure)
+price$district <- as.factor(price$district)
+
+# merge data
+price$tradeTime <- as.Date(price$tradeTime)
+Macro$Date <- as.Date(Macro$Date)
+price$tradeMonth <- format(price$tradeTime, "%Y-%m") 
+Macro$month <- format(Macro$Date, "%Y-%m") 
+price2 <- merge(price, Macro, all.x = T, by.x = "tradeMonth", by.y = "month")
+
+# Delete irrelevant variables
+price2 <- price2[,-c(1,26)]
+```
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+plot(cars)
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
